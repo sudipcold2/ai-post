@@ -12,10 +12,11 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 def get_db():
     if SUPABASE_URL and SUPABASE_KEY:
         try:
-            from supabase import create_client, Client
+            from supabase import create_client, Client, ClientOptions
             # Force HTTP/1.1 to avoid StreamReset/h2 issues on Render/Supabase
-            http_client = httpx.Client(http2=False)
-            return create_client(SUPABASE_URL, SUPABASE_KEY, options={"http_client": http_client})
+            # Using ClientOptions class instead of dict to avoid AttributeError
+            options = ClientOptions(http_client=httpx.Client(http2=False))
+            return create_client(SUPABASE_URL, SUPABASE_KEY, options=options)
         except Exception as e:
             print(f"Warning: Failed to init Supabase client: {e}")
             return None
