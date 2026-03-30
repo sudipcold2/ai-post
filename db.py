@@ -1,6 +1,7 @@
 import os
 import json
-import datetime
+import time
+import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,31 +13,43 @@ def get_db():
     if SUPABASE_URL and SUPABASE_KEY:
         try:
             from supabase import create_client, Client
-            return create_client(SUPABASE_URL, SUPABASE_KEY)
+            # Force HTTP/1.1 to avoid StreamReset/h2 issues on Render/Supabase
+            http_client = httpx.Client(http2=False)
+            return create_client(SUPABASE_URL, SUPABASE_KEY, options={"http_client": http_client})
         except Exception as e:
             print(f"Warning: Failed to init Supabase client: {e}")
             return None
     return None
 
 def fetch_config():
-    db = get_db()
-    if db:
-        try:
-            res = db.table("app_config").select("*").eq("id", "main").execute()
-            if res.data:
-                return res.data[0]["config_data"]
-            
-            # If DB is empty, bootstrap with local config.json if it exists
-            if os.path.exists("config.json"):
-                with open("config.json", "r") as f:
-                    config = json.load(f)
-                try:
-                    db.table("app_config").insert({"id": "main", "config_data": config}).execute()
-                except Exception as e:
-                    print(f"Warning: Failed to bootstrap config to Supabase: {e}")
-                return config
-        except Exception as e:
-            print(f"Error fetching config from Supabase: {e}")
+    # Attempt with retries for production resilience
+    max_retries = 3
+    for attempt in range(max_retries):
+        db = get_db()
+        if db:
+            try:
+                res = db.table("app_config").select("*").eq("id", "main").execute()
+                if res.data:
+                    return res.data[0]["config_data"]
+                
+                # If DB is empty, bootstrap with local config.json if it exists
+                if os.path.exists("config.json"):
+                    with open("config.json", "r") as f:
+                        config = json.load(f)
+                    try:
+                        db.table("app_config").insert({"id": "main", "config_data": config}).execute()
+                    except Exception as e:
+                        print(f"Warning: Failed to bootstrap config to Supabase: {e}")
+                    return config
+                break # Exit loop if successful but empty
+            except Exception as e:
+                print(f"Attempt {attempt + 1} - Error fetching config from Supabase: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(1 * (attempt + 1)) # Simple backoff
+                else:
+                    print("Max retries reached for Supabase config fetch.")
+        else:
+            break
             
     # Fallback entirely to local
     if os.path.exists("config.json"):
