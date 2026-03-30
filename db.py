@@ -1,7 +1,7 @@
 import os
 import json
 import time
-import httpx
+import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,22 +9,28 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+# Singleton client to avoid connection exhaustion on Render
+_supabase_client = None
+
 def get_db():
+    global _supabase_client
+    if _supabase_client:
+        return _supabase_client
+        
     if SUPABASE_URL and SUPABASE_KEY:
         try:
-            from supabase import create_client, Client, ClientOptions
-            # Force HTTP/1.1 to avoid StreamReset/h2 issues on Render/Supabase
-            # Using ClientOptions class instead of dict to avoid AttributeError
-            options = ClientOptions(http_client=httpx.Client(http2=False))
-            return create_client(SUPABASE_URL, SUPABASE_KEY, options=options)
+            from supabase import create_client
+            # Standard initialization for maximum compatibility
+            _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            return _supabase_client
         except Exception as e:
             print(f"Warning: Failed to init Supabase client: {e}")
             return None
     return None
 
 def fetch_config():
-    # Attempt with retries for production resilience
-    max_retries = 3
+    # Attempt with aggressive retries for production resilience
+    max_retries = 5
     for attempt in range(max_retries):
         db = get_db()
         if db:
@@ -42,11 +48,13 @@ def fetch_config():
                     except Exception as e:
                         print(f"Warning: Failed to bootstrap config to Supabase: {e}")
                     return config
-                break # Exit loop if successful but empty
+                break # Exit loop if successful but results in no data
             except Exception as e:
                 print(f"Attempt {attempt + 1} - Error fetching config from Supabase: {e}")
                 if attempt < max_retries - 1:
-                    time.sleep(1 * (attempt + 1)) # Simple backoff
+                    # Exponential-ish backoff
+                    wait_time = (attempt + 1) * 2
+                    time.sleep(wait_time)
                 else:
                     print("Max retries reached for Supabase config fetch.")
         else:
