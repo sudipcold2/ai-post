@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0d0f1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>AI Poster Admin</title>
+    <meta name="description" content="Admin dashboard for generating and publishing LinkedIn posts across multiple engineering categories.">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob magenta"></div>
+        <div class="blob blue"></div>
+        <div class="blob purple"></div>
+    </div>
+
+    <div class="glass-container">
+        <header>
+            <div class="header-top">
+                <h1>AI Poster <span class="highlight">Admin</span></h1>
+            </div>
+
+            <div class="header-controls">
+                <!-- Category Dropdown -->
+                <div class="control-group">
+                    <label class="control-label" for="topic-select">Category</label>
+                    <div class="select-wrapper" id="select-wrapper">
+                        <span class="select-icon" id="select-icon">🤖</span>
+                        <select id="topic-select" class="glass-select">
+                            <option value="ai">Trending Tech &amp; AI</option>
+                        </select>
+                        <span class="select-chevron">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Draft Button -->
+                <div class="control-group">
+                    <label class="control-label">&nbsp;</label>
+                    <button id="draft-btn" class="glass-btn primary-btn">
+                        <span class="icon">✨</span> Draft New Options
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Draft Section -->
+            <section id="draft-section" class="panel hidden">
+                <div class="section-header">
+                    <div>
+                        <h2>Review Draft Options</h2>
+                        <div id="draft-meta" class="draft-meta"></div>
+                    </div>
+                    <button onclick="discardDrafts()" class="glass-btn danger-btn">🗑️ Discard All</button>
+                </div>
+                <div id="drafts-container" class="draft-grid"></div>
+            </section>
+
+            <section class="panel history-panel">
+                <h2>Recent Posts</h2>
+                <div id="history-container" class="history-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

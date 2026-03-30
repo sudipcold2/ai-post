@@ -1,0 +1,9 @@
+fastapi>=0.100.0
+uvicorn>=0.23.0
+google-genai
+python-dotenv
+feedparser
+supabase
+passlib
+bcrypt
+httpx

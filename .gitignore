@@ -1,0 +1,25 @@
+# Environments
+venv/
+.venv/
+env/
+.env
+
+# Python caching
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local Database/History
+history.json
+config.json
+
+# Generated Artifacts
+*.pdf
+*.jpg
+*.png
+*.webp
+
+# OS Files
+.DS_Store
+Thumbs.db
