@@ -2,97 +2,91 @@ import os
 import json
 import time
 import datetime
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-# Singleton client to avoid connection exhaustion on Render
-_supabase_client = None
+# The direct connection string for PostgreSQL
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
-    global _supabase_client
-    if _supabase_client:
-        return _supabase_client
-        
-    if SUPABASE_URL and SUPABASE_KEY:
+    if DATABASE_URL:
         try:
-            from supabase import create_client
-            # Standard initialization for maximum compatibility
-            _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-            return _supabase_client
+            # We open a new connection for each master operation for maximum reliability
+            # in serverless/free-tier environments, then close it.
+            conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+            return conn
         except Exception as e:
-            print(f"Warning: Failed to init Supabase client: {e}")
+            print(f"Warning: Failed to connect to PostgreSQL: {e}")
             return None
     return None
 
 def fetch_config():
-    # Attempt with aggressive retries for production resilience
-    max_retries = 5
-    for attempt in range(max_retries):
-        db = get_db()
-        if db:
-            try:
-                res = db.table("app_config").select("*").eq("id", "main").execute()
-                if res.data:
-                    return res.data[0]["config_data"]
+    conn = get_db()
+    if conn:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT config_data FROM app_config WHERE id = 'main'")
+                row = cur.fetchone()
+                if row:
+                    return row["config_data"]
                 
-                # If DB is empty, bootstrap with local config.json if it exists
+                # Bootstrap if DB is empty but we have a local config
                 if os.path.exists("config.json"):
                     with open("config.json", "r") as f:
                         config = json.load(f)
-                    try:
-                        db.table("app_config").insert({"id": "main", "config_data": config}).execute()
-                    except Exception as e:
-                        print(f"Warning: Failed to bootstrap config to Supabase: {e}")
+                    cur.execute(
+                        "INSERT INTO app_config (id, config_data) VALUES (%s, %s)",
+                        ("main", json.dumps(config))
+                    )
+                    conn.commit()
                     return config
-                break # Exit loop if successful but results in no data
-            except Exception as e:
-                print(f"Attempt {attempt + 1} - Error fetching config from Supabase: {e}")
-                if attempt < max_retries - 1:
-                    # Exponential-ish backoff
-                    wait_time = (attempt + 1) * 2
-                    time.sleep(wait_time)
-                else:
-                    print("Max retries reached for Supabase config fetch.")
-        else:
-            break
+        except Exception as e:
+            print(f"Error fetching config via SQL: {e}")
+        finally:
+            conn.close()
             
-    # Fallback entirely to local
+    # Fallback to local
     if os.path.exists("config.json"):
         with open("config.json", "r") as f:
             return json.load(f)
     return {}
 
 def save_config(config_dict):
-    db = get_db()
-    if db:
+    conn = get_db()
+    if conn:
         try:
-            db.table("app_config").upsert({"id": "main", "config_data": config_dict}).execute()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO app_config (id, config_data) VALUES (%s, %s) "
+                    "ON CONFLICT (id) DO UPDATE SET config_data = EXCLUDED.config_data",
+                    ("main", json.dumps(config_dict))
+                )
+                conn.commit()
         except Exception as e:
-            print(f"Error saving config to Supabase: {e}")
+            print(f"Error saving config via SQL: {e}")
+        finally:
+            conn.close()
     else:
         with open("config.json", "w") as f:
             json.dump(config_dict, f, indent=2)
 
 def fetch_history():
-    db = get_db()
-    if db:
+    conn = get_db()
+    if conn:
         try:
-            res = db.table("post_history").select("*").order("timestamp", desc=True).execute()
-            history_list = []
-            for row in res.data:
-                history_list.append({
-                    "timestamp": row["timestamp"],
-                    "group": row.get("group_key", ""),
-                    "group_name": row.get("group_name", ""),
-                    "content": row.get("content", "")
-                })
-            return history_list
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT timestamp, group_key as group, group_name, content "
+                    "FROM post_history ORDER BY timestamp DESC"
+                )
+                return cur.fetchall()
         except Exception as e:
-            print(f"Error fetching history from Supabase: {e}")
+            print(f"Error fetching history via SQL: {e}")
+        finally:
+            conn.close()
 
     # Fallback to local
     if os.path.exists("history.json"):
@@ -104,17 +98,25 @@ def fetch_history():
     return []
 
 def save_history(entry: dict):
-    db = get_db()
-    if db:
+    conn = get_db()
+    if conn:
         try:
-            db.table("post_history").insert({
-                "timestamp": entry["timestamp"],
-                "group_key": entry.get("group", ""),
-                "group_name": entry.get("group_name", ""),
-                "content": entry.get("content", "")
-            }).execute()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO post_history (timestamp, group_key, group_name, content) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (
+                        entry["timestamp"],
+                        entry.get("group", ""),
+                        entry.get("group_name", ""),
+                        entry.get("content", "")
+                    )
+                )
+                conn.commit()
         except Exception as e:
-            print(f"Error saving history to Supabase: {e}")
+            print(f"Error saving history via SQL: {e}")
+        finally:
+            conn.close()
     else:
         history_list = fetch_history()
         history_list.insert(0, entry)

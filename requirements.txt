@@ -7,3 +7,4 @@ supabase
 passlib
 bcrypt
 httpx
+psycopg2-binary
