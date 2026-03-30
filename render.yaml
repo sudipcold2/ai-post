@@ -22,3 +22,5 @@ services:
         sync: false
       - key: LINKEDIN_URN
         sync: false
+      - key: DATABASE_URL
+        sync: false
