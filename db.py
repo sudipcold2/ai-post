@@ -122,3 +122,80 @@ def save_history(entry: dict):
         history_list.insert(0, entry)
         with open("history.json", "w") as f:
             json.dump(history_list, f, indent=2)
+
+def fetch_recent_posts(limit: int = 5) -> list:
+    """Fetch the most recent N published posts for history-aware generation."""
+    conn = get_db()
+    if conn:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT content, group_name, timestamp FROM post_history "
+                    "ORDER BY timestamp DESC LIMIT %s",
+                    (limit,)
+                )
+                rows = cur.fetchall()
+                return [dict(r) for r in rows]
+        except Exception as e:
+            print(f"Error fetching recent posts: {e}")
+        finally:
+            conn.close()
+    
+    # Fallback to local
+    if os.path.exists("history.json"):
+        with open("history.json", "r") as f:
+            try:
+                data = json.load(f)
+                return data[:limit]
+            except:
+                pass
+    return []
+
+def fetch_stats() -> dict:
+    """Fetch post statistics for the dashboard."""
+    conn = get_db()
+    if conn:
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Total posts
+                cur.execute("SELECT COUNT(*) as total FROM post_history")
+                total = cur.fetchone()["total"]
+                
+                # Posts per category
+                cur.execute(
+                    "SELECT COALESCE(group_name, group_key, 'Unknown') as category, COUNT(*) as count "
+                    "FROM post_history GROUP BY category ORDER BY count DESC"
+                )
+                categories = [dict(r) for r in cur.fetchall()]
+                
+                # Last post timestamp
+                cur.execute("SELECT timestamp FROM post_history ORDER BY timestamp DESC LIMIT 1")
+                last_row = cur.fetchone()
+                last_posted = last_row["timestamp"] if last_row else None
+                
+                return {
+                    "total_posts": total,
+                    "categories": categories,
+                    "last_posted": last_posted
+                }
+        except Exception as e:
+            print(f"Error fetching stats: {e}")
+        finally:
+            conn.close()
+    
+    # Fallback to local
+    if os.path.exists("history.json"):
+        with open("history.json", "r") as f:
+            try:
+                data = json.load(f)
+                total = len(data)
+                cats = {}
+                for item in data:
+                    cat = item.get("group_name", item.get("group", item.get("topic", "Unknown")))
+                    cats[cat] = cats.get(cat, 0) + 1
+                categories = [{"category": k, "count": v} for k, v in sorted(cats.items(), key=lambda x: -x[1])]
+                last_posted = data[0].get("timestamp") if data else None
+                return {"total_posts": total, "categories": categories, "last_posted": last_posted}
+            except:
+                pass
+    return {"total_posts": 0, "categories": [], "last_posted": None}

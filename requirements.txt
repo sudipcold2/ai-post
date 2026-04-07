@@ -3,8 +3,7 @@ uvicorn>=0.23.0
 google-genai
 python-dotenv
 feedparser
-supabase
-passlib
-bcrypt
-httpx
+requests
+schedule
 psycopg2-binary
+Pillow

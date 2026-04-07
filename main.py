@@ -1,25 +1,24 @@
 import time
 import schedule
-import json
-import os
 import datetime
-from scraper import scrape_articles_for_active_topic
+from scraper import scrape_articles_for_active_group
 from generator import generate_linkedin_post
 from linkedin_poster import post_to_linkedin
+from db import fetch_config, save_history
 
 def job():
     print("Starting scheduled LinkedIn Poster job...")
     
     try:
-        # Read config
-        with open("config.json", "r") as f:
-            config = json.load(f)
+        config = fetch_config()
         
-        active_topic_key = config.get("active_topic", "ai")
-        instruction = config.get("topics", {}).get(active_topic_key, {}).get("instruction", "Write an engaging LinkedIn post.")
+        active_group_key = config.get("active_group", "ai")
+        group_data = config.get("groups", {}).get(active_group_key, {})
+        instruction = group_data.get("instruction", "Write an engaging LinkedIn post.")
+        group_name = group_data.get("name", active_group_key)
         
-        print(f"Scraping articles for topic: {active_topic_key}...")
-        articles = scrape_articles_for_active_topic()
+        print(f"Scraping articles for group: {active_group_key} ({group_name})...")
+        articles = scrape_articles_for_active_group()
         
         if not articles:
             print("No articles found to post today. Skipping.")
@@ -27,7 +26,10 @@ def job():
             
         print(f"Found {len(articles)} articles. Generating post...")
         drafts = generate_linkedin_post(articles, instruction)
-        post_content = drafts[0] if isinstance(drafts, list) and len(drafts) > 0 else str(drafts)
+        if isinstance(drafts, list) and len(drafts) > 0:
+            post_content = drafts[0].get("post", "") if isinstance(drafts[0], dict) else drafts[0]
+        else:
+            post_content = str(drafts)
         
         print("\n--- Generated Post Preview ---")
         print(post_content)
@@ -38,25 +40,12 @@ def job():
         
         if success:
             print("Job completed successfully!")
-            
-            # Log to history.json
-            history_file = "history.json"
-            history_data = []
-            if os.path.exists(history_file):
-                with open(history_file, "r") as hf:
-                    try:
-                        history_data = json.load(hf)
-                    except:
-                        history_data = []
-            
-            history_data.insert(0, {
+            save_history({
                 "timestamp": datetime.datetime.now().isoformat(),
-                "topic": active_topic_key,
+                "group": active_group_key,
+                "group_name": group_name,
                 "content": post_content
             })
-            
-            with open(history_file, "w") as hf:
-                json.dump(history_data, hf, indent=2)
             
     except Exception as e:
         print(f"An error occurred during the job: {e}")

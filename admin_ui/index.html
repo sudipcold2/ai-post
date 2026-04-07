@@ -10,7 +10,7 @@
     <title>AI Poster Admin</title>
     <meta name="description" content="Admin dashboard for generating and publishing LinkedIn posts across multiple engineering categories.">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=3.1">
 </head>
 
 <body>
@@ -24,6 +24,24 @@
         <header>
             <div class="header-top">
                 <h1>AI Poster <span class="highlight">Admin</span></h1>
+            </div>
+
+            <!-- Stats Bar -->
+            <div id="stats-bar" class="stats-bar">
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-total">—</span>
+                    <span class="stat-label">Total Posts</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-categories">—</span>
+                    <span class="stat-label">Categories Used</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-value" id="stat-last-posted">—</span>
+                    <span class="stat-label">Last Posted</span>
+                </div>
             </div>
 
             <div class="header-controls">
@@ -59,7 +77,13 @@
                         <h2>Review Draft Options</h2>
                         <div id="draft-meta" class="draft-meta"></div>
                     </div>
-                    <button onclick="discardDrafts()" class="glass-btn danger-btn">🗑️ Discard All</button>
+                    <div class="section-actions">
+                        <button id="preview-toggle" onclick="togglePreview()" class="glass-btn preview-toggle-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            LinkedIn Preview
+                        </button>
+                        <button onclick="discardDrafts()" class="glass-btn danger-btn">🗑️ Discard All</button>
+                    </div>
                 </div>
                 <div id="drafts-container" class="draft-grid"></div>
             </section>
@@ -73,7 +97,7 @@
 
     <div id="toast" class="toast hidden"></div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=3.1"></script>
 </body>
 
 </html>

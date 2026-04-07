@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-from db import fetch_config, save_config, fetch_history, save_history
+from db import fetch_config, save_config, fetch_history, save_history, fetch_stats
 
 app = FastAPI()
 
@@ -32,7 +32,6 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
     expected_username = os.getenv("ADMIN_USERNAME", "admin")
     expected_password = os.getenv("ADMIN_PASSWORD", "password")
     
-    # Use secrets module to protect against timing attacks
     correct_username = secrets.compare_digest(
         credentials.username.encode("utf8"),
         expected_username.encode("utf8")
@@ -74,6 +73,10 @@ async def update_config(request: Request, username: str = Depends(authenticate))
     save_config(new_config)
     return {"status": "success"}
 
+@app.get("/api/stats")
+async def get_stats(username: str = Depends(authenticate)):
+    return fetch_stats()
+
 @app.post("/api/draft")
 async def draft_post(request: Request, username: str = Depends(authenticate)):
     try:
@@ -108,10 +111,48 @@ async def draft_post(request: Request, username: str = Depends(authenticate)):
         return {
             "status": "success",
             "drafts": drafts,
+            "articles_count": len(articles),
             "group": active_group_key,
             "group_name": group_name,
             "group_icon": group_icon
         }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/regenerate-single")
+async def regenerate_single(request: Request, username: str = Depends(authenticate)):
+    """Regenerate a single draft, excluding the other existing drafts."""
+    try:
+        from scraper import scrape_articles_for_active_group
+        from generator import generate_single_draft
+
+        body = await request.json()
+        existing_drafts = body.get("existing_drafts", [])
+        group_key = body.get("group", "")
+
+        config = fetch_config()
+        group_data = config.get("groups", {}).get(group_key, {})
+        instruction = group_data.get("instruction", "")
+
+        articles = scrape_articles_for_active_group()
+        if not articles:
+            return {"status": "error", "message": "No articles found."}
+
+        new_draft = generate_single_draft(articles, instruction, exclude_drafts=existing_drafts)
+        return {"status": "success", "draft": new_draft}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/generate-image")
+async def generate_image_endpoint(request: Request, username: str = Depends(authenticate)):
+    try:
+        from image_gen import generate_image_for_post
+        data = await request.json()
+        draft_text = data.get("draft")
+        group_name = data.get("group_name", "Tech News")
+        
+        b64 = generate_image_for_post(draft_text, group_name)
+        return {"status": "success", "image_base64": b64}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -122,9 +163,10 @@ async def publish_post_endpoint(request: Request, username: str = Depends(authen
         content = data.get("content")
         group = data.get("group", "")
         group_name = data.get("group_name", group)
+        image_base64 = data.get("image_base64")
 
         from linkedin_poster import post_to_linkedin
-        success = post_to_linkedin(content)
+        success = post_to_linkedin(content, image_base64=image_base64)
 
         if success:
             save_history({
